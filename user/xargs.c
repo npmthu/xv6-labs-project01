@@ -43,9 +43,9 @@ int main(int argc, char *argv[]){
                         fprintf(2, "xargs: fork failed\n");
                         exit(1);
                     } else if(child_pid == 0){
-                        for(int i = 0; i < x_argc; i++){
-                            fprintf(2, "xargs: arg[%d] = %s\n", i, x_argv[i]);
-                        }
+                        //for(int i = 0; i < x_argc; i++){
+                        //    fprintf(2, "xargs: arg[%d] = %s\n", i, x_argv[i]);
+                        //}
                         exec(x_argv[0], x_argv);
                         fprintf(2, "xargs: exec failed\n");
                         exit(1);
