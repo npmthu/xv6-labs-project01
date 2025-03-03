@@ -2,85 +2,85 @@
 #include "user/user.h"
 #include "kernel/param.h"
 
-int main(int argc, char *argv[]){
-    char buf[512];
+#define BUF_SIZE 512
+
+int main(int argc, char *argv[]) {
+    char buf[BUF_SIZE];
     char *x_argv[MAXARG];
-    int x_argc = argc - 1;
     char *arg_s, *arg_e;
     char ch;
     int read_bytes, has_arg = 0, child_pid;
 
-    for(int i = 1; i < argc; i++){
-        x_argv[i - 1] = argv[i];
+    // Copy command arguments, but ignore `-n 1`
+    int base_argc = 0;
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-n") == 0 && i + 1 < argc && strcmp(argv[i + 1], "1") == 0) {
+            i++;  // Skip "-n 1"
+            continue;
+        }
+        x_argv[base_argc++] = argv[i];
     }
+    
+    if (base_argc == 0) {
+        fprintf(2, "xargs: missing command\n");
+        exit(1);
+    }
+
+    x_argv[base_argc] = 0;  // Null-terminate argument list
 
     arg_s = arg_e = buf;
 
-    while((read_bytes = read(0, &ch, sizeof(char))) == 1){
-        if(arg_e >= buf + 512 - 1){
+    while ((read_bytes = read(0, &ch, sizeof(char))) == 1) {
+        if (arg_e >= buf + BUF_SIZE - 1) {
             fprintf(2, "xargs: argument too long\n");
-            arg_s = arg_e = buf; // reset buffer
+            arg_s = arg_e = buf;  // Reset buffer
             continue;
         }
-        if(ch == '\n' || ch == ' '){
-            if(has_arg){
-                *arg_e = '\0';
-                if(x_argc >= MAXARG - 1){
-                    fprintf(2, "xargs: too many arguments\n");
-                    x_argc = argc - 1;
-                    arg_s = arg_e = buf;
-                    continue;
-                }
-                x_argv[x_argc++] = arg_s;
-                has_arg = 0;
-            }
-            arg_e++;
+        if (ch == '\n' || ch == ' ') {  
+            if (has_arg) {  
+                *arg_e = '\0';  // Null-terminate argument
+                
+                // Prepare command arguments
+                x_argv[base_argc] = arg_s;
+                x_argv[base_argc + 1] = 0;  // Null-terminate
 
-            if(ch == '\n'){
-                if(x_argc > argc - 1){
-                    x_argv[x_argc] = 0;
-                    if((child_pid = fork()) < 0){
-                        fprintf(2, "xargs: fork failed\n");
-                        exit(1);
-                    } else if(child_pid == 0){
-                        //for(int i = 0; i < x_argc; i++){
-                        //    fprintf(2, "xargs: arg[%d] = %s\n", i, x_argv[i]);
-                        //}
-                        exec(x_argv[0], x_argv);
-                        fprintf(2, "xargs: exec failed\n");
-                        exit(1);
-                    }
+                // Fork and execute immediately
+                if ((child_pid = fork()) < 0) {
+                    fprintf(2, "xargs: fork failed\n");
+                    exit(1);
+                } else if (child_pid == 0) {
+                    exec(x_argv[0], x_argv);
+                    fprintf(2, "xargs: exec failed (command: %s)\n", x_argv[0]);
+                    exit(1);
                 }
-                x_argc = argc - 1; // reset arg list
-                arg_s = arg_e = buf;
+
+                has_arg = 0;
+                wait(0);  // Wait for process
             }
-        } else{
+            arg_s = arg_e = buf;  // Reset buffer
+        } else {
             *arg_e++ = ch;
             has_arg = 1;
         }
     }
 
-    // execute the last command if input does not end with '\n'
-    if(has_arg){
+    // Handle last argument if input doesn't end with newline
+    if (has_arg) {
         *arg_e = '\0';
-        if(x_argc >= MAXARG - 1){
-            fprintf(2, "xargs: too many arguments\n");
-            exit(1);
-        }
-        x_argv[x_argc++] = arg_s;
-        x_argv[x_argc] = 0;
 
-        if((child_pid = fork()) < 0){
+        x_argv[base_argc] = arg_s;
+        x_argv[base_argc + 1] = 0;
+
+        if ((child_pid = fork()) < 0) {
             fprintf(2, "xargs: fork failed\n");
             exit(1);
-        } else if(child_pid == 0){
+        } else if (child_pid == 0) {
             exec(x_argv[0], x_argv);
-            fprintf(2, "xargs: exec failed\n");
+            fprintf(2, "xargs: exec failed (command: %s)\n", x_argv[0]);
             exit(1);
         }
+        wait(0);
     }
-
-    while(wait(0) > 0);
 
     exit(0);
 }
